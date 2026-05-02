@@ -96,4 +96,103 @@ class CollideActor(Actor):
 
         return False
     
+
+class Orb(CollideActor):
+    MAX_TIMER = 250
+
+    def __init__(self, pos, dir_x):
+        super().__init__(pos)
+
+        self.direction_x = dir_x
+        self.floating = False
+        self.trapped_enemy_type = None
+        self.timer = -1
+        self.blown_frames = 6
+
+    def hit_test(self, bolt):
+        collided = self.collidepoint(bolt.pos)
+        if collided:
+            self.timer = Orb.MAX_TIMER - 1
+        return collided
     
+    def update(self):
+        self.timer += 1
+
+        if self.floating:
+            self.move(0, -1, randint(1,2))
+        else:
+            if self.move(self.direction_x, 0, 4):
+                self.floating = True
+
+        if self.timer == self.blown_frames:
+            self.floating = True
+        elif self.timer >= Orb.MAX_TIMER or self.y <= -40:
+            game.pops.append(Pop(self.pos, 1))
+            if self.trapped_enemy_type != None:
+                game.fruits.append(Fruit(self.pos, self.trapped_enemy_type))
+            game.play_sound("pop", 4)
+
+        if self.timer < 9:
+            self.image = "orb" + str(self.timer // 3)
+        elif self.trapped_enemy_type != None:
+            self.image = "trap" + str(self.trapped_enemy_type) + \
+                        str((self.timer // 4) % 8)
+        else:
+            self.image = "orb" + str(3 + (((self.timer - 9) // 8) % 4))
+
+class Bolt(CollideActor):
+    SPEED = 7
+
+    def __init__(self, pos, dir_x):
+        super().__init__(pos)
+
+        self.direction_x = dir_x
+        self.active = True
+    
+    def update(self):
+        if self.move(self.direcdtion_x, 0, Bolt.SPEED):
+            self.active = False
+        else:
+            for obj in game.orbs + [game.player]:
+                if obj and obj.hit_test(self):
+                    self.active = False
+                    break
+        direction_idx = "1" if self.direction_x > 0 else "0"
+        anim_frame = str((game.timer // 4) % 2)
+        self.image = "bolt" + direction_idx + anim_frame
+
+class Pop(Actor):
+    def __init__(self, pos, type):
+        super().__init__("blank", pos)
+
+        self.type = type
+        self.timer = -1
+
+    def update(self):
+        self.timer += 1
+        self.image = "pop" + str(self.type) + str(self.timer // 2)
+
+class GravityActor(CollideActor):
+    MAX_FALL_SPEED = 10
+
+    def __init__(self, pos):
+        super().__init__(pos, ANCHOR_CENTER_BOTTOM)
+
+        self.vel_y = 0
+        self.landed = False
+
+    def update(self, detect=True):
+        self.vel_y = min(self.vel_y + 1, GravityActor.MAX_FALL_SPEED)
+
+        if detect:
+            if self.move(0, sign(self.vel_y), abs(self.vel_y)):
+                self.vel_y = 0
+                self.landed = True
+
+            if self.toop >= HEIGHT:
+                self.y = 1
+
+        else:
+            self.y += self.vel_y
+
+# TODO: class Fruit(GravityActor):
